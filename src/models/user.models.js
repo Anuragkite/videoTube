@@ -49,14 +49,16 @@ const userSchema = new Schema({
     type:String
   }
   
-},{
+},
+{
     timestamps:true
 }
 
 );
 
 
-// check the password is modified or not using bcrypt funtion
+// check the password is modified or not using bcrypt funtion 
+// don't use async and next togther it will cause error i have removed it 
 userSchema.pre("save", async function(){
   if(!this.isModified("password")) return ;
   this.password = await bcrypt.hash(this.password,10)
