@@ -11,13 +11,13 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
-    const user = await User.findbyId(userId);
+    const user = await User.findById(userId);
     // small check for user existance
     if (!user) {
       throw new ApiError(400, "Error in generateaccessandrefreshtoken ", error);
     }
     const accessToken = user.generateAccessToken();
-    const refreshToken = user.generateRefreshTokenToken();
+    const refreshToken = user.generateRefreshToken();
     user.refreshToken = refreshToken; // stored for longer duration
     await user.save({ validateBeforeSave: false });
     return { accessToken, refreshToken };
@@ -157,7 +157,7 @@ const loginUser = asyncHandler(async (req, res) => {
     $or: [{ username }, { email }], // used the mongodb operator or to find user based on anyone of this fields
   });
   if (!user) {
-    new ApiError(404, "user not found in the database ");
+    throw new ApiError(404, "user not found in the database ");
   }
 
   // to check the password is correct or not
@@ -170,7 +170,7 @@ const loginUser = asyncHandler(async (req, res) => {
     user._id
   );
 
-  const loggedInUser = await User.findbyId(user._id).select(
+  const loggedInUser = await User.findById(user._id).select(
     "-password -refreshToken"
   );
   if (!loggedInUser) {
@@ -222,11 +222,11 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
       incomingRefreshToken,
       process.env.REFRESH_TOKEN_SECRET
     );
-    const user = await User.findbyId(decodedToken?._id);
+    const user = await User.findById(decodedToken?._id);
     if (!user) {
       throw new ApiError(401, "refresh token Invalid");
     }
-    if (user?.refreshAccessToken !== incomingRefreshToken) {
+    if (user?.refreshToken !== incomingRefreshToken) {
       throw new ApiError(401, "Refresh tokens arenot matched!");
     }
     const options = {
@@ -257,7 +257,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
 const changeCurrentPassword = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword } = req.body;
-  const user = await User.findbyid(req.user?._id);
+  const user = await User.findByid(req.user?._id);
   const isPasswordValid = user.isPasswordCorrect(oldPassword);
   if (!isPasswordValid) {
     throw new ApiError(401, "old password is incorrect!");
@@ -306,10 +306,12 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     },
     { new: true }
   ).select("-password -refreshtoken");
-  res.status(200).json(new ApiResponse(200,user,"avatar updated successfully"));
+  res
+    .status(200)
+    .json(new ApiResponse(200, user, "avatar updated successfully"));
 });
 
-const updateUserCoverImage = asyncHandler(async (req, res) => { 
+const updateUserCoverImage = asyncHandler(async (req, res) => {
   const coverImageLocalPath = req.file?.path;
   if (!coverImageLocalPath) {
     throw new ApiError(400, "file is required");
@@ -321,16 +323,135 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
       "something went wrong while while uploading the coverImage"
     );
   }
-const user = User.findByIdAndUpdate(
-  req.user?._id,{
-    $set:{
-      coverImage:coverImage.url
-    }
-  },{new:true}
-).select("-password -refreshtoken");
-res.status(200).json(new ApiResponse(200,user,"coverImage updated successfully"));
-
-
+  const user = User.findByIdAndUpdate(
+    req.user?._id,
+    {
+      $set: {
+        coverImage: coverImage.url,
+      },
+    },
+    { new: true }
+  ).select("-password -refreshtoken");
+  res
+    .status(200)
+    .json(new ApiResponse(200, user, "coverImage updated successfully"));
 });
 
-export { registerUser, refreshAccessToken, loginUser, logoutUser ,updateUserAvatar,updateUserCoverImage,updateAccountDetails,getCurrentUser,changeCurrentPassword};
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const username = req.params;
+  if (!username) {
+    throw new ApiError(400, "unable to get user name");
+  }
+  const channel = await User.aggregate([
+    {
+      $match: {
+        username: username?.toLowerCase(),
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers",
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo",
+      },
+    },
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers",
+        },
+        channelSubscribedToCount: {
+          $size: "$suscribedTo",
+        },
+        isSubscribed: {
+          $cond: {
+            if: {
+              $in: [req.user?._id, "$suscribers.suscriber"],
+            },
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    {
+      // project only the necessary data
+      $project: {
+        fullname: 1,
+        username: 1,
+        avatar: 1,
+        subscribersCount: 1,
+        channelSubscribedToCount: 1,
+        isSubscribed: 1,
+        coverImage: 1,
+        email: 1,
+      },
+    },
+  ]);
+  if (!channel?.length) {
+    throw new ApiError(404, "channel not found");
+  }
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, channel[0], "channel profile fetched successfully")
+    );
+});
+const getWatchHistory = asyncHandler(async (req, res) => {
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: new mangoose.Types.ObjectId(req.user?._id),
+      },
+    },{
+      $lookup:{
+        from:"videos",
+        localField:"watchHistory",
+        foreignField:"_id",
+        as:"watchHistory",
+        pipeline:[
+          {
+            $lookup:{
+              from:"users",
+              localField:"owner",
+              foreignField:"_id",
+              as:"owner",
+              pipeline:[
+                {
+                  $lookup:{
+                  $project:{
+                    fullname:1,
+                    username:1,
+                    avatar:1,
+                  }  
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]);
+});
+
+export {
+  registerUser,
+  refreshAccessToken,
+  loginUser,
+  logoutUser,
+  updateUserAvatar,
+  updateUserCoverImage,
+  updateAccountDetails,
+  getCurrentUser,
+  changeCurrentPassword,
+};
