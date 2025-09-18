@@ -8,7 +8,8 @@ import { registerUser ,
   updateUserAvatar,
   updateAccountDetails,
   updateUserCoverImage,
-  getUserChannelProfile
+  getUserChannelProfile,
+  getWatchHistory
 } from "../controllers/user.controller.js";
 import {upload} from "../middlewares/multer.middleware.js"
 import { uploadOnCloudinary} from "../utils/cloudinary.js"; //
@@ -41,9 +42,10 @@ router.route("refresh-token").post(refreshAccessToken)
 router.route("/logout").post(verifyJWT,logoutUser);
 router.route("/change-password").post(verifyJWT,changeCurrentPassword)
 router.route("/current-user").get(verifyJWT,getCurrentUser)
-router.route("/update-details").patch(verifyJWT,updateAccountDetails)
-router.route("/update-avatar").post(verifyJWT,updateUserAvatar)
-router.route("/update-coverimage").post(verifyJWT,updateUserCoverImage)
+router.route("/update-details").patch(verifyJWT,updateAccountDetails)//to update the patch used instead of post
 router.route("/c/:username").get(verifyJWT,getUserChannelProfile)//here username is passsed as param from URL 
+router.route("/history").get(verifyJWT,getWatchHistory)
+router.route("/update-avatar").patch(verifyJWT,upload.single("avatarImg"),updateUserAvatar)// we need to make this in proper format
+router.route("/update-coverimage").patch(verifyJWT,upload.single("coverImg"),updateUserCoverImage)
 
 export default router;
