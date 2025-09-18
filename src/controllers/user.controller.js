@@ -54,8 +54,8 @@ const registerUser = asyncHandler(async (req, res) => {
     );
   }
 
-  const avatarLocalPath = req.files?.avatar?.[0]?.path;
-  const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
+const avatarLocalPath = req.files?.avatar?.[0]?.path;
+const coverImageLocalPath = req.files?.coverImage?.[0]?.path;
 
   // const avatarUpload = avatarLocalPath
   //   ? await uploadOnCloudinary(avatarLocalPath)
@@ -437,11 +437,19 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                 }
               ]
             }
+          },{
+            $addFields:{
+              owner:{
+                $first :"owner"
+              }
+            }
           }
         ]
       }
     }
   ]);
+
+  return res.status(200).json(new ApiResponse(200,user[0]?.watchHistory,"watch history fetched successfully!!"))
 });
 
 export {
@@ -454,4 +462,6 @@ export {
   updateAccountDetails,
   getCurrentUser,
   changeCurrentPassword,
+  getUserChannelProfile,
+  getWatchHistory
 };
