@@ -12,7 +12,7 @@ import { registerUser ,
   getWatchHistory
 } from "../controllers/user.controller.js";
 import {upload} from "../middlewares/multer.middleware.js"
-import { uploadOnCloudinary} from "../utils/cloudinary.js"; //
+// import {uploadOnCloudinary} from "../utils/cloudinary.js"; //
 import {verifyJWT}  from "../middlewares/auth.middlewares.js";
 // import { verify } from "jsonwebtoken";
 
